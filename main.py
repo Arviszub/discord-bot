@@ -87,10 +87,7 @@ async def msg(ctx, *, message: str):
     if user_id not in user_memory:
         user_memory[user_id] = deque(maxlen=MAX_MEMORY)
 
-    # Add user message to memory
     user_memory[user_id].append({"role": "user", "content": message})
-
-    # Build conversation for OpenAI
     messages = [{"role": "system", "content": (
         "You are a goofy, funny friend. You joke around, "
         "help when needed, and occasionally tease or gaslight lightly, "
