@@ -8,6 +8,11 @@ from collections import deque
 import requests
 from elevenlabs import save
 from elevenlabs import AsyncElevenLabs
+from flask import Flask
+import threading
+
+app = Flask("")
+
 
 load_dotenv("tokens.env")
 AIKEY = os.getenv("OPENAI_API_KEY")
@@ -42,6 +47,16 @@ MAX_MEMORY = 4
 async def on_ready():
     print(f"Logged in as {bot.user} (ID: {bot.user.id})")
 
+@app.route("/")
+def home():
+    return "Bot is running!"
+
+
+def run():
+    app.run(host="0.0.0.0", port=8080)
+
+threading.Thread(target=run).start()
+
 @bot.tree.command(name="join", description="Join your voice channel")
 async def join(interaction: discord.Interaction):
     if interaction.user.voice:
@@ -70,7 +85,7 @@ async def play_audio_in_channel(channel, audio):
 
     vc.play(
         discord.FFmpegPCMAudio(
-            executable=r"E:\ffmpeg\bin\ffmpeg.exe",
+            executable="ffmpeg",
             source=audio
         )
     )
