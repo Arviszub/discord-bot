@@ -3,6 +3,6 @@ discord.py==2.6.0
 python-dotenv==1.0.1
 openai==1.0.0
 requests==2.31.0
-elevenlabs==0.2.0
+elevenlabs==0.2.1  # latest stable version
 Flask==2.3.3
 ipython
