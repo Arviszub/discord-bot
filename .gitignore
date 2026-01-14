@@ -1,0 +1,4 @@
+tokens.env
+__pycache__/
+*.pyc
+reply.mp3
