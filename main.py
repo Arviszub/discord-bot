@@ -14,7 +14,7 @@ AIKEY = os.getenv("OPENAI_API_KEY")
 TOKEN = os.getenv("DISCORD_TOKEN")
 VOICEKEY = os.getenv("ELEVENLABS_API_KEY")
 
-GUILD_ID = 1444018728583823448  # your server ID
+GUILD_ID = 1444018728583823448
 
 client_api = openai.OpenAI(api_key=AIKEY)
 
@@ -97,7 +97,6 @@ async def msg(ctx, *, message: str):
         "but stay friendly."
     )}] + list(user_memory[user_id])
 
-    # Run OpenAI call in executor to avoid blocking Discord
     loop = asyncio.get_running_loop()
     response = await loop.run_in_executor(
         None,
