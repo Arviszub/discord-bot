@@ -5,57 +5,50 @@ from dotenv import load_dotenv
 import openai
 import asyncio
 from collections import deque
-import requests
 from elevenlabs import generate, set_api_key, save
-from flask import Flask
-import threading
 
-app = Flask("")
-
-
+# Load environment variables
 load_dotenv("tokens.env")
 AIKEY = os.getenv("OPENAI_API_KEY")
 TOKEN = os.getenv("DISCORD_TOKEN")
 VOICEKEY = os.getenv("ELEVENLABS_API_KEY")
 
-GUILD_ID = 1444018728583823448
+GUILD_ID = 1444018728583823448  # Replace with your server ID
+VOICE_NAME = "Adam"  # ElevenLabs voice
+MODEL_NAME = "eleven_multilingual_v2"
 
-client_api = openai.OpenAI(api_key=AIKEY)
+# Set API keys
+openai_client = openai.OpenAI(api_key=AIKEY)
+set_api_key(VOICEKEY)
 
-aivoice_id = "nPczCjzI2devNBz1zQrb"
-
-eleven_client = set_api_key(VOICEKEY)
-
-class MyClient(commands.Bot):
-    async def setup_hook(self):
-        guild = discord.Object(id=GUILD_ID)
-        self.tree.copy_global_to(guild=guild)
-        await self.tree.sync(guild=guild)
-
-
+# Bot setup
 intents = discord.Intents.default()
 intents.message_content = True
-bot = MyClient(command_prefix="!", intents=intents)
+bot = commands.Bot(command_prefix="!", intents=intents)
 
+# Memory for last 4 messages per user
+user_memory = {}
+MAX_MEMORY = 4
 
-user_memory = {} 
+# Voice channel audio player
+async def play_audio_in_channel(channel, audio_file):
+    vc = channel.guild.voice_client
+    if not vc:
+        vc = await channel.connect()
 
-MAX_MEMORY = 4 
+    if vc.is_playing():
+        vc.stop()
 
+    vc.play(discord.FFmpegPCMAudio(executable="/usr/bin/ffmpeg", source=audio_file))
+    while vc.is_playing():
+        await asyncio.sleep(0.1)
+
+# Bot events
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user} (ID: {bot.user.id})")
 
-@app.route("/")
-def home():
-    return "Bot is running!"
-
-
-def run():
-    app.run(host="0.0.0.0", port=8080)
-
-threading.Thread(target=run).start()
-
+# Slash commands
 @bot.tree.command(name="join", description="Join your voice channel")
 async def join(interaction: discord.Interaction):
     if interaction.user.voice:
@@ -72,65 +65,52 @@ async def leave(interaction: discord.Interaction):
     else:
         await interaction.response.send_message("I am not in a voice channel.", ephemeral=True)
 
-
-async def play_audio_in_channel(channel, audio):
-    vc = channel.guild.voice_client
-
-    if not vc:
-        vc = await channel.connect()
-
-    if vc.is_playing():
-        vc.stop()
-
-    vc.play(
-        discord.FFmpegPCMAudio(
-            executable="ffmpeg",
-            source=audio
-        )
-    )
-
-    while vc.is_playing():
-        await asyncio.sleep(0.1)
-    
-
+# Main message command
 @bot.command()
 async def msg(ctx, *, message: str):
     user_id = ctx.author.id
     voice_channel = ctx.author.voice.channel if ctx.author.voice else None
 
+    # Initialize memory for the user
     if user_id not in user_memory:
         user_memory[user_id] = deque(maxlen=MAX_MEMORY)
 
+    # Add user message to memory
     user_memory[user_id].append({"role": "user", "content": message})
+
+    # Build conversation for OpenAI
     messages = [{"role": "system", "content": (
         "You are a goofy, funny friend. You joke around, "
-        "help when needed, and occasionally tease or gaslight lightly, "
+        "help when needed, and occasionally tease lightly, "
         "but stay friendly."
     )}] + list(user_memory[user_id])
 
+    # Get AI reply (run in executor to avoid blocking Discord)
     loop = asyncio.get_running_loop()
     response = await loop.run_in_executor(
         None,
-        lambda: client_api.chat.completions.create(
+        lambda: openai_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=messages
         )
     )
 
     reply = response.choices[0].message.content
-
     user_memory[user_id].append({"role": "assistant", "content": reply})
 
+    # Generate TTS with ElevenLabs
     audio = generate(
         text=reply,
-        voice="Adam", 
-        model="eleven_multilingual_v2"  
+        voice=VOICE_NAME,
+        model=MODEL_NAME
     )
-
     save(audio, "reply.mp3")
 
+    # Play in VC if user is connected
     if voice_channel:
         await play_audio_in_channel(voice_channel, "reply.mp3")
     else:
-        await ctx.send("Join a voice channel first!")
+        await ctx.send(reply)
+
+# Run bot
 bot.run(TOKEN)
