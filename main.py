@@ -6,8 +6,7 @@ import openai
 import asyncio
 from collections import deque
 import requests
-from elevenlabs import save
-from elevenlabs import ElevenLabs
+from elevenlabs import generate, set_api_key, save
 from flask import Flask
 import threading
 
@@ -25,7 +24,7 @@ client_api = openai.OpenAI(api_key=AIKEY)
 
 aivoice_id = "nPczCjzI2devNBz1zQrb"
 
-eleven_client = ElevenLabs(api_key=VOICEKEY)
+eleven_client = set_api_key(VOICEKEY)
 
 class MyClient(commands.Bot):
     async def setup_hook(self):
@@ -122,14 +121,13 @@ async def msg(ctx, *, message: str):
 
     user_memory[user_id].append({"role": "assistant", "content": reply})
 
-    audio = eleven_client.text_to_speech(
-        voice_id=aivoice_id,
-        model_id="eleven_multilingual_v2",
-        text=reply
+    audio = generate(
+        text=reply,
+        voice="Adam", 
+        model="eleven_multilingual_v2"  
     )
 
-    with open("reply.mp3", "wb") as f:
-        f.write(audio)
+    save(audio, "reply.mp3")
 
     if voice_channel:
         await play_audio_in_channel(voice_channel, "reply.mp3")
