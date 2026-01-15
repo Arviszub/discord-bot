@@ -5,24 +5,17 @@ from dotenv import load_dotenv
 import openai
 import asyncio
 from collections import deque
-import requests
-from elevenlabs import save
-from elevenlabs import AsyncElevenLabs
+import pyttsx3  # <-- added for TTS
 from flask import Flask
 import threading
 
 load_dotenv("tokens.env")
 AIKEY = os.getenv("OPENAI_API_KEY")
 TOKEN = os.getenv("DISCORD_TOKEN")
-VOICEKEY = os.getenv("ELEVENLABS_API_KEY")
 
 GUILD_ID = 1444018728583823448  # your server ID
 
 client_api = openai.OpenAI(api_key=AIKEY)
-
-aivoice_id = "nPczCjzI2devNBz1zQrb"
-
-eleven_client = AsyncElevenLabs(api_key=VOICEKEY)
 
 class MyClient(commands.Bot):
     async def setup_hook(self):
@@ -35,10 +28,13 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = MyClient(command_prefix="!", intents=intents)
 
+user_memory = {}
+MAX_MEMORY = 4
 
-user_memory = {} 
-
-MAX_MEMORY = 4 
+# Initialize pyttsx3 engine
+engine = pyttsx3.init()
+engine.setProperty('rate', 160)  # speed
+engine.setProperty('volume', 1.0)  # volume
 
 @bot.event
 async def on_ready():
@@ -87,27 +83,6 @@ async def leave(interaction: discord.Interaction):
     else:
         await interaction.response.send_message("I am not in a voice channel.", ephemeral=True)
 
-
-async def play_audio_in_channel(channel, audio):
-    vc = channel.guild.voice_client
-
-    if not vc:
-        vc = await channel.connect()
-
-    if vc.is_playing():
-        vc.stop()
-
-    vc.play(
-        discord.FFmpegPCMAudio(
-            executable="/usr/bin/ffmpeg",
-            source=audio
-        )
-    )
-
-    while vc.is_playing():
-        await asyncio.sleep(0.1)
-    
-
 @bot.command()
 async def msg(ctx, *, message: str):
     user_id = ctx.author.id
@@ -137,21 +112,16 @@ async def msg(ctx, *, message: str):
     )
 
     reply = response.choices[0].message.content
-
     user_memory[user_id].append({"role": "assistant", "content": reply})
 
-    audio = eleven_client.text_to_speech.convert(
-        voice_id=aivoice_id,
-        model_id="eleven_multilingual_v2",
-        text=reply
-    )
-
-    with open("reply.mp3", "wb") as f:
-        async for chunk in audio:
-            f.write(chunk)
+    # ------------------ pyttsx3 TTS ------------------
+    audio_file = "reply.mp3"
+    engine.save_to_file(reply, audio_file)
+    engine.runAndWait()  # generate the mp3
 
     if voice_channel:
-        await play_audio_in_channel(voice_channel, "reply.mp3")
+        await play_audio_in_channel(voice_channel, audio_file)
     else:
-        await ctx.send("Join a voice channel first!")
+        await ctx.send(reply)  # fallback: send text if not in VC
+
 bot.run(TOKEN)
