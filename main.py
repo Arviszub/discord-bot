@@ -74,21 +74,63 @@ async def leave(interaction: discord.Interaction):
     else:
         await interaction.response.send_message("I am not in a voice channel.", ephemeral=True)
 
+async def update_memory_summary(user_id):
+    mem = user_memory[user_id]
+
+    if len(mem["chat"]) < 10:
+        return
+
+    convo = "\n".join(
+        f"{m['role']}: {m['content']}" for m in mem["chat"]
+    )
+
+    loop = asyncio.get_running_loop()
+    summary_response = await loop.run_in_executor(
+        None,
+        lambda: client_api.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Summarize important long-term facts about the user: "
+                        "preferences, personality, recurring jokes, dislikes, name, etc. "
+                        "Keep it short."
+                    )
+                },
+                {"role": "user", "content": convo}
+            ]
+        )
+    )
+
+    mem["summary"] = summary_response.choices[0].message.content
+
 @bot.command()
 async def msg(ctx, *, message: str):
     user_id = ctx.author.id
     voice_channel = ctx.author.voice.channel if ctx.author.voice else None
 
     if user_id not in user_memory:
-        user_memory[user_id] = deque(maxlen=MAX_MEMORY)
+        user_memory[user_id] = init_user(user_id)
+    
+    user_memory[user_id]["chat"].append({
+        "role": "user",
+        "content": message
+    })
 
-    user_memory[user_id].append({"role": "user", "content": message})
+    mem = user_memory[user_id]
 
-    messages = [{"role": "system", "content": (
-        "You are a goofy, funny friend. You joke around, "
-        "help when needed, and occasionally tease or gaslight lightly, "
-        "but stay friendly."
-    )}] + list(user_memory[user_id])
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a goofy, funny friend. You joke around, "
+                "help when needed, tease lightly, and act like you "
+                "remember the user personally.\n\n"
+                f"Long-term memory about this user:\n{mem['summary'] or 'None yet.'}"
+            )
+        }
+    ] + list(mem["chat"])
 
     loop = asyncio.get_running_loop()
     response = await loop.run_in_executor(
@@ -102,6 +144,7 @@ async def msg(ctx, *, message: str):
     reply = response.choices[0].message.content
 
     user_memory[user_id].append({"role": "assistant", "content": reply})
+    await update_memory_summary(user_id)
 -
     tts = gTTS(text=reply, lang="en")
     tts.save("reply.mp3")
