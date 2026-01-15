@@ -6,3 +6,4 @@ elevenlabs
 Flask
 ipython
 pynacl
+pyttsx3
