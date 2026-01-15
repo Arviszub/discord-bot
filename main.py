@@ -5,10 +5,11 @@ from dotenv import load_dotenv
 import openai
 import asyncio
 from collections import deque
-import pyttsx3  # <-- added for TTS
+from gtts import gTTS
 from flask import Flask
 import threading
 
+# ------------------ Load tokens ------------------
 load_dotenv("tokens.env")
 AIKEY = os.getenv("OPENAI_API_KEY")
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -17,25 +18,22 @@ GUILD_ID = 1444018728583823448  # your server ID
 
 client_api = openai.OpenAI(api_key=AIKEY)
 
+# ------------------ Bot setup ------------------
 class MyClient(commands.Bot):
     async def setup_hook(self):
         guild = discord.Object(id=GUILD_ID)
         self.tree.copy_global_to(guild=guild)
         await self.tree.sync(guild=guild)
 
-
 intents = discord.Intents.default()
 intents.message_content = True
 bot = MyClient(command_prefix="!", intents=intents)
 
+# ------------------ Memory ------------------
 user_memory = {}
 MAX_MEMORY = 4
 
-# Initialize pyttsx3 engine
-engine = pyttsx3.init()
-engine.setProperty('rate', 160)  # speed
-engine.setProperty('volume', 1.0)  # volume
-
+# ------------------ On ready ------------------
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user} (ID: {bot.user.id})")
@@ -83,6 +81,7 @@ async def leave(interaction: discord.Interaction):
     else:
         await interaction.response.send_message("I am not in a voice channel.", ephemeral=True)
 
+# ------------------ Command: chat + TTS ------------------
 @bot.command()
 async def msg(ctx, *, message: str):
     user_id = ctx.author.id
@@ -112,16 +111,17 @@ async def msg(ctx, *, message: str):
     )
 
     reply = response.choices[0].message.content
+
     user_memory[user_id].append({"role": "assistant", "content": reply})
 
-    # ------------------ pyttsx3 TTS ------------------
-    audio_file = "reply.mp3"
-    engine.save_to_file(reply, audio_file)
-    engine.runAndWait()  # generate the mp3
+    # ------------------ gTTS TTS ------------------
+    tts = gTTS(text=reply, lang="en")
+    tts.save("reply.mp3")
 
     if voice_channel:
-        await play_audio_in_channel(voice_channel, audio_file)
+        await play_audio_in_channel(voice_channel, "reply.mp3")
     else:
-        await ctx.send(reply)  # fallback: send text if not in VC
+        await ctx.send(reply)  # fallback: text if not in VC
 
+# ------------------ Run bot ------------------
 bot.run(TOKEN)
