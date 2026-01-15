@@ -9,7 +9,6 @@ from gtts import gTTS
 from flask import Flask
 import threading
 
-# ------------------ Load tokens ------------------
 load_dotenv("tokens.env")
 AIKEY = os.getenv("OPENAI_API_KEY")
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -18,7 +17,6 @@ GUILD_ID = 1444018728583823448  # your server ID
 
 client_api = openai.OpenAI(api_key=AIKEY)
 
-# ------------------ Bot setup ------------------
 class MyClient(commands.Bot):
     async def setup_hook(self):
         guild = discord.Object(id=GUILD_ID)
@@ -29,11 +27,9 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = MyClient(command_prefix="!", intents=intents)
 
-# ------------------ Memory ------------------
 user_memory = {}
-MAX_MEMORY = 4
+MAX_MEMORY = 8
 
-# ------------------ On ready ------------------
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user} (ID: {bot.user.id})")
@@ -51,7 +47,6 @@ def run_flask():
 
 threading.Thread(target=run_flask).start()
 
-# ------------------ Helper: play audio ------------------
 async def play_audio_in_channel(channel, audio_file):
     vc = channel.guild.voice_client
     if not vc:
@@ -64,8 +59,6 @@ async def play_audio_in_channel(channel, audio_file):
     while vc.is_playing():
         await asyncio.sleep(0.1)
 
-# ------------------ Slash commands ------------------
-@bot.tree.command(name="join", description="Join your voice channel")
 async def join(interaction: discord.Interaction):
     if interaction.user.voice:
         await interaction.user.voice.channel.connect()
@@ -81,7 +74,6 @@ async def leave(interaction: discord.Interaction):
     else:
         await interaction.response.send_message("I am not in a voice channel.", ephemeral=True)
 
-# ------------------ Command: chat + TTS ------------------
 @bot.command()
 async def msg(ctx, *, message: str):
     user_id = ctx.author.id
@@ -90,17 +82,14 @@ async def msg(ctx, *, message: str):
     if user_id not in user_memory:
         user_memory[user_id] = deque(maxlen=MAX_MEMORY)
 
-    # Add user message to memory
     user_memory[user_id].append({"role": "user", "content": message})
 
-    # Build conversation for OpenAI
     messages = [{"role": "system", "content": (
         "You are a goofy, funny friend. You joke around, "
         "help when needed, and occasionally tease or gaslight lightly, "
         "but stay friendly."
     )}] + list(user_memory[user_id])
 
-    # Run OpenAI call in executor to avoid blocking Discord
     loop = asyncio.get_running_loop()
     response = await loop.run_in_executor(
         None,
@@ -113,8 +102,7 @@ async def msg(ctx, *, message: str):
     reply = response.choices[0].message.content
 
     user_memory[user_id].append({"role": "assistant", "content": reply})
-
-    # ------------------ gTTS TTS ------------------
+-
     tts = gTTS(text=reply, lang="en")
     tts.save("reply.mp3")
 
