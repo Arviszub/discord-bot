@@ -82,6 +82,26 @@ async def play_audio_in_channel(channel, audio_file):
 async def on_ready():
     print(f"Logged in as {bot.user} (ID: {bot.user.id})")
 
+@bot.tree.command(name="join", description="Join your current voice channel")
+async def join(interaction: discord.Interaction):
+    if not interaction.user.voice:
+        await interaction.response.send_message(
+            "You need to be in a voice channel first.", ephemeral=True
+        )
+        return
+
+    channel = interaction.user.voice.channel
+    vc = interaction.guild.voice_client
+
+    if vc:
+        await vc.move_to(channel)
+    else:
+        await channel.connect()
+
+    await interaction.response.send_message(
+        f"Joined **{channel.name}** 🔊"
+        )
+
 @bot.tree.command(name="leave", description="Leave the voice channel")
 async def leave(interaction: discord.Interaction):
     if interaction.guild.voice_client:
